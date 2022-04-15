@@ -1,3 +1,7 @@
+"""
+This class stores the point clouds, which are the non zero points of the 3D U-Nets prediction
+"""
+
 import numpy as np
 
 
@@ -11,6 +15,10 @@ class PointCloud:
         self.shift = 0
 
     def addPoints(self, points):
+        """
+        Adds points to instance of class
+        :param points: list or array
+        """
         if len(points) == 0:
             self.points = points
         else:
@@ -20,27 +28,11 @@ class PointCloud:
                 self.points = self.points.tolist()
                 self.points.extend([points])
 
-    def shiftToOrigin(self):
-        p1, p2 = self.getMinMax3D()
-        newshift = (p1 + p2) / 2.0
-        for i in range(len(self.points)):
-            self.points[i] = self.points[i] - newshift
-        self.shift = self.shift + newshift
-
-    def meanValue(self):
-        """
-        calculates mean value of all points, aka center of gravity
-        :return:
-        """
-        return_vec = [0, 0, 0]
-        for i in range(len(self.points)):
-            return_vec = return_vec + self.points[i]
-        if len(self.points) > 0:
-            return return_vec / (len(self.points))
-        else:
-            return return_vec
-
     def getMinMax3D(self):
+        """
+        Calculates the minimum and maximum point of the point cloud
+        :return: array of min and max point
+        """
         min_point = [0, 0, 0]
         max_point = [0, 0, 0]
         if len(self.points) > 0:
@@ -54,7 +46,14 @@ class PointCloud:
                 if max_point[2] < self.points[i][2]: max_point[2] = self.points[i][2]
         return np.asarray(min_point), np.asarray(max_point)
 
-    def pointsClostToLine(self, a, b, dx, pc):
+    def pointsClosestToLine(self, a, b, dx, pc):
+        """
+        Calculates the points in the pointcloud, pc, closest to the line, which is given by parameters a and b.
+        :param a: point on line
+        :param b: direction of line
+        :param dx: maximum distance to line
+        :param pc: PointCloud
+        """
         pc.clear_points()
         for i in range(len(self.points)):
             # Equation 7
@@ -65,6 +64,10 @@ class PointCloud:
         pc.points = np.asarray(pc.points)
 
     def removePoints(self, pc):
+        """
+        Remove specified points, pc, from pointcloud
+        :param pc: PointCloud
+        """
         if len(pc.points) == 0: return
         j = 0
         k = 0
@@ -86,8 +89,8 @@ class PointCloud:
 
         self.points = np.asarray(new_points)
 
-    def getPoints(self):
-        return self.points
-
     def clear_points(self):
+        """
+        Clears all points
+        """
         self.points = []

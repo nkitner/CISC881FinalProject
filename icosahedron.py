@@ -1,9 +1,10 @@
-# import bpy
+"""
+This class calculates the directions that will be used for the Hough transform class
+Reference: https://sinestesia.co/blog/tutorials/python-icospheres/
+"""
+
 from math import sqrt
 import numpy as np
-"""
-https://sinestesia.co/blog/tutorials/python-icospheres/
-"""
 
 
 class icosahedron:

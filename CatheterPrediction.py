@@ -1,6 +1,6 @@
 import numpy as np
-from CISC881FinalProject import icosahedron as icosahedron
-from CISC881FinalProject.point_cloud import PointCloud
+from icosahedron import icosahedron
+from point_cloud import PointCloud
 from skimage.morphology import skeletonize
 import matplotlib.pyplot as plt
 
@@ -10,11 +10,20 @@ source: https://github.com/cdalitz/hough-3d-lines
 
 
 def getDirectionalVectors():
-    ico = icosahedron.icosahedron()
+    """
+    Gets directional vectors from icosahedron class
+    :return: Directional vectors
+    """
+    ico = icosahedron()
     return ico.getVertices()
 
 
 def getPointCloud(arr):
+    """
+    Gets all points in array that are equal to one, and returns an array of all tuples
+    :param arr: 3D Numpy array
+    :return: Array of tuples
+    """
     point_cloud = []
     for x in range(128):
         for y in range(128):
@@ -32,12 +41,21 @@ def median(x):
 
 
 def remove_outliers(data, thresh=2.0):
+    """
+    Removes outliers from point cloud
+    :param data: list of points
+    :param thresh: float
+    :return: new list of points, without outliers
+    """
     m = median(data)
     s = np.abs(data - m)
     return data[(s < median(s) * thresh).all(axis=1)]
 
 
 class Hough:
+    """
+    Hough class
+    """
     def __init__(self, minP, maxP, var_dx, dir_arr):
         self.num_b = len(dir_arr)
         self.direction_arr = dir_arr
@@ -53,6 +71,10 @@ class Hough:
         self.addPointCloud(self.pointCloud)
 
     def addPointCloud(self, pc):
+        """
+        Adds passed in point cloud to own point cloud
+        :param pc: PointCloud
+        """
         self.votingSpace = np.zeros(int(self.num_x * self.num_x * self.num_b))
         self.pointCloud = pc
         i = 0
@@ -62,6 +84,11 @@ class Hough:
         print(np.unique(self.votingSpace))
 
     def pointVote(self, point, add):
+        """
+        Performs voting procedure of Hough transform
+        :param point: Point (tuple)
+        :param add: Boolean for adding or subtracting from voting space
+        """
 
         for j in range(self.num_b):
             b = self.direction_arr[j]
@@ -82,13 +109,11 @@ class Hough:
                 else:
                     self.votingSpace[index] -= 1
 
-    def removePointCloud(self, pc):
-        i = 0
-        for point in pc.points:
-            self.pointVote(point, False)
-            i += 1
-
     def getLines(self):
+        """
+        Gets lines based on most votes
+        :return: Returns number of votes, point in line, and direction of line
+        """
         a = []
 
         index = np.argmax(self.votingSpace)
@@ -112,6 +137,12 @@ class Hough:
 
 
 def getPolynomial(pc, num_slices):
+    """
+    Give point cloud, performs 2nd degree polynomial fitting in the y and z direction, where x is as large as num_slices
+    :param pc: PointCloud
+    :param num_slices: Int
+    :return: Array of all points in the polynomial function
+    """
     new_pc = remove_outliers(pc, thresh=5)
     if len(new_pc) > 50:
         x, y, z = new_pc.T
@@ -125,10 +156,18 @@ def getPolynomial(pc, num_slices):
     new_y = fity(x)
     new_z = fitz(x)
 
-    return np.asarray([x, new_y, new_z]), [fity.coefficients[0], fitz.coefficients[0]]
+    return np.asarray([x, new_y, new_z])
 
 
 def performHough(pred_arr, opt_nlines, threshold=0.5):
+    """
+    Performs the iterative 3D hough transform
+    :param pred_arr: 3D Array of model predictions
+    :param opt_nlines: Number of catheters in the ultrasound
+    :param threshold: Threshold for binary thresholding
+    :return: list of of list of points
+    """
+    # Threshold and slight preprocessing of the unet prediction
     pred_arr[pred_arr > threshold] = 1
     pred_arr[pred_arr <= threshold] = 0
     pred_arr = skeletonize(pred_arr)
@@ -168,10 +207,8 @@ def performHough(pred_arr, opt_nlines, threshold=0.5):
     nvotes = 3
     nlines = 0
 
-    curr_points = []
-    curr_dirs = []
-
     pts_tracking = []
+    # Loops until all lines specified are modeled, or Hough transform has less than 2 votes for every remaining line
     while len(hough.pointCloud.points) > 1 and (opt_nlines == 0 or opt_nlines > nlines) and (nvotes > 2):
         print("Lines: ", nlines)
         hough.pointCloud.removePoints(y)
@@ -179,18 +216,14 @@ def performHough(pred_arr, opt_nlines, threshold=0.5):
             hough.update_point_cloud()
 
         nvotes, a, b = hough.getLines()
-        a[0] = 0
         print("nvotes: ", nvotes)
-        hough.pointCloud.pointsClostToLine(a, b, opt_dx, y)
+        hough.pointCloud.pointsClosestToLine(a, b, opt_dx, y)
 
         nlines += 1
 
-        curr_points.append(a)
-        curr_dirs.append(b)
-
         x_points = y.points[:, 0]
         range_x = np.max(x_points) - np.min(x_points)
-        pts, slopes = getPolynomial(y.points, range_x)
+        pts = getPolynomial(y.points, range_x)
         pts_tracking.append(pts)
 
     # Append all points together to plot
@@ -209,6 +242,7 @@ def performHough(pred_arr, opt_nlines, threshold=0.5):
     ax.set_xlabel('x')
     plt.show(block=False)
 
+    # Plot only the curved catheters
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
     ax.scatter(x_new, y_new, z_new, 'b')
@@ -220,7 +254,8 @@ def performHough(pred_arr, opt_nlines, threshold=0.5):
     return pts_tracking
 
 
-pred_arr = np.load("./pred_array.npy")
+# Run hough transfrom for pre-loaded 3D array of model prediction
+pred_arr = np.load("./FocalLossModelPrediction.npy")
 pred_arr = pred_arr[:, :, :]
 results = performHough(pred_arr, 16, threshold=0.25)
 plt.show()
